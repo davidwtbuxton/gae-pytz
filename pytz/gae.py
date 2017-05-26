@@ -54,13 +54,22 @@ class TimezoneLoader(object):
             raise ValueError('Bad path segment: %r' % os.path.pardir)
 
         cache_key = 'pytz.zoneinfo.%s.%s' % (OLSON_VERSION, name)
-        zonedata = memcache.get(cache_key)
-        if zonedata is None:
-            zonedata = get_zoneinfo().read('zoneinfo/' + '/'.join(name_parts))
-            memcache.add(cache_key, zonedata)
-            log.info('Added timezone to memcache: %s' % cache_key)
+        zip_member = 'zoneinfo/' + '/'.join(name_parts)
+
+        try:
+            zonedata = memcache.get(cache_key)
+        except AssertionError:
+            # Skip the memcache stuff. This can happen when running locally
+            # and the service stubs haven't been initialised yet.
+            log.exception('Failed get for key %r', cache_key)
+            zonedata = get_zoneinfo().read(zip_member)
         else:
-            log.info('Loaded timezone from memcache: %s' % cache_key)
+            if zonedata is None:
+                zonedata = get_zoneinfo().read(zip_member)
+                memcache.add(cache_key, zonedata)
+                log.info('Added timezone to memcache: %s' % cache_key)
+            else:
+                log.info('Loaded timezone from memcache: %s' % cache_key)
 
         return StringIO(zonedata)
 
